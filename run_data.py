@@ -1,5 +1,3 @@
-# author: sivanov
-# date: 27 Oct 2015
 from __future__ import division
 import networkx as nx
 import pandas as pd
