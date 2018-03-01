@@ -148,7 +148,8 @@ if __name__ == "__main__":
     training_labels = []
 
     for j in range(4):
-        seeds = [i*(j+1) for i in range(500)]
+        seeds = [1, 10, 20, 30, 40, 50, 60, 70] #fixed seed set
+        #seeds = [i*(j+1) for i in range(500)] #not fixed seed set
         activations, attempted_activations = simulate_activations(G, seeds, edge_probs)
         random.seed(j)
 
@@ -162,7 +163,7 @@ if __name__ == "__main__":
                     training_data.append(feature_matrix[node])
                     training_labels.append(False)
 
-    print(np.array(training_data).shape)
+    print('shape of training data was: ', np.array(training_data).shape)
 
     training_data = np.array(training_data)
 
