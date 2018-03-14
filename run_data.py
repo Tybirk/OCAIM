@@ -1,4 +1,4 @@
-from __future__ import division
+
 import networkx as nx
 import pandas as pd
 import time
@@ -121,35 +121,19 @@ def simulate_activations(G, seeds, edge_probs):
     return activations, attempted_activations
 
 
-if __name__ == "__main__":
-    numberOfFeatures = 3882
-    numberOfNodes = 7420
-
-    G = prep.read_graph('vk_mv.txt')
-    feature_matrix = prep.get_feature_matrix('vk_mem.txt', numberOfNodes, numberOfFeatures)
-    alphas = prep.generate_alphas(numberOfFeatures)
-
-    beta = -3
-
-    parameters = np.insert(alphas, 0, beta)
-
-    feature_matrix = feature_matrix[:, :200]
-    parameters = parameters[:200]
-
-    #DO AVERAGING
+def divide_rows_by_mean(feature_matrix):
     for i in range(feature_matrix.shape[0]):
         rowsum = np.sum(feature_matrix[i, 1:])
         if rowsum > 0:
             feature_matrix[i, 1:] = feature_matrix[i, 1:]/rowsum
 
-    edge_probs = get_edge_probabilities(feature_matrix, parameters)
 
+def get_training_data_from_trials(seeds, trials):
     training_data = []
     training_labels = []
 
-    for j in range(4):
-        seeds = [1, 10, 20, 30, 40, 50, 60, 70] #fixed seed set
-        #seeds = [i*(j+1) for i in range(500)] #not fixed seed set
+    for j in range(trials):
+        seeds = [1, 10, 20, 30, 40, 50, 60, 70]  # fixed seed set
         activations, attempted_activations = simulate_activations(G, seeds, edge_probs)
         random.seed(j)
 
@@ -162,26 +146,39 @@ if __name__ == "__main__":
                 for _ in range(int(attempts) - 1):
                     training_data.append(feature_matrix[node])
                     training_labels.append(False)
+    return training_data, training_labels
+
+if __name__ == "__main__":
+    numberOfFeatures = 200
+    numberOfNodes = 7420
+    numberOfEdges = 115276
+    numberOfTrials = 2
+    seeds = [1, 10, 20, 30, 40, 50, 60, 70]
+
+    G, feature_matrix = prep.generate_graph_with_features(numberOfNodes, numberOfEdges, numberOfFeatures)  #randomgraph false, filename = 'vk_mv.txt'
+    alphas = prep.generate_alphas(numberOfFeatures)
+    beta = -2
+    parameters = np.insert(alphas, 0, beta)
+
+    feature_matrix = feature_matrix[:, :numberOfFeatures]  ##Extracting subset of features
+    parameters = parameters[:numberOfFeatures]
+
+    #DO AVERAGING ON ROWS SUCH THAT IT DOES NOT MATTER THAT YOU LIKE MANY FEATURES
+    divide_rows_by_mean(feature_matrix)
+
+    edge_probs = get_edge_probabilities(feature_matrix, parameters)
+
+    training_data, training_labels = get_training_data_from_trials(seeds, numberOfTrials)
 
     print('shape of training data was: ', np.array(training_data).shape)
 
-    training_data = np.array(training_data)
-
-    training_labels = np.array(training_labels)
-
-    #print('max number of features: ', max(training_data.sum(axis=1)))
-    #print(training_labels)
-
+    print('max number of features: ', max(training_data.sum(axis=1)))
 
     print('average edge prob was: ', sum(edge_probs)/numberOfNodes)
 
-    #print('total activations were: ', sum(activations.values()))
-
-    #print(parameters.shape)
-    #print(training_data.shape)
-
     logisticRegr = LogisticRegression(fit_intercept=False)
     logisticRegr.fit(training_data, training_labels)
+
     print('actual params: ', parameters)
     print('predicted params: ', logisticRegr.coef_)
     print('actual probs: ', edge_probs)
@@ -189,6 +186,7 @@ if __name__ == "__main__":
     print('predicted probs: ', predictedProbs)
     print('On average parameter estimate is this far off: ', np.mean(np.abs(parameters-logisticRegr.coef_)))
     print('On average probability estimate was this far off: ', np.mean(np.abs(edge_probs-predictedProbs)))
+    print('The maximal difference in probability estimate was', np.max(np.abs(edge_probs-predictedProbs)))
     #print(logisticRegr.intercept_)
 
     #print((logisticRegr.predict_proba(training_data)).mean())

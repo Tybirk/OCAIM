@@ -1,6 +1,7 @@
 from __future__ import division
 import networkx as nx
 import numpy as np
+import random
 import math
 import graph_tool.all as gt
 import time
@@ -60,7 +61,35 @@ def read_graph(filename, directed=True):
             G.add_edge(int(d[0]), int(d[1]))
     return G
 
+def create_graph(numberOfNodes, numberOfEdges):
+    G = nx.DiGraph()
+    for i in range(numberOfEdges):
+        rand1 = random.randint(0, numberOfNodes-1)
+        rand2 = random.randint(0, numberOfNodes-1)
+        if rand1 != rand2:
+            G.add_edge(rand1, rand2)
+    return G
 
+def create_feature_matrix(numberOfNodes, numberOfFeatures):
+    #feature_matrix = [random.randint(0,1) for i in range(numberOfNodes) for j in range(numberOfFeatures)]
+
+    feature_matrix = np.zeros(numberOfFeatures * numberOfNodes).reshape(numberOfNodes, numberOfFeatures)
+    for i in range(numberOfNodes):
+        for j in range(numberOfFeatures):
+            if random.random() < 0.2:
+                feature_matrix[i,j] = 1
+
+    feature_matrix = np.insert(feature_matrix, 0, 1, axis=1) #First column consists on ones
+    return feature_matrix
+
+def generate_graph_with_features(numberOfNodes, numberOfEdges, numberOfFeatures, RandomGraph = True, filename=None):
+    if RandomGraph:
+        G = create_graph(numberOfNodes, numberOfEdges)
+        feature_matrix = create_feature_matrix(numberOfNodes, numberOfFeatures)
+    else:
+        G = read_graph(filename)
+        feature_matrix = get_feature_matrix(filename, numberOfNodes, numberOfFeatures)
+    return G, feature_matrix
 if __name__ == "__main__":
     print(get_feature_matrix('vk_mem.txt', 7420, 3882))
     print(generate_alphas(3882))
