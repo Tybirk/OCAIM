@@ -7,6 +7,7 @@ import numpy as np
 import math
 import prepare_data as prep
 from sklearn.linear_model import LogisticRegression
+import matplotlib.pyplot as plt
 
 
 def sigmoid(x):
@@ -97,11 +98,10 @@ def get_edge_probabilities(feature_matrix, parameters):
 
 
 def simulate_activations(G, seeds, edge_probs):
-
     activations = dict(zip(G.nodes() , [False]*len(G)))
     attempted_activations = np.zeros(len(G))
 
-    new_activations = seeds
+    new_activations = list(seeds)
     for seed in seeds:
         activations[seed] = True
 
@@ -148,12 +148,29 @@ def get_training_data_from_trials(seeds, trials):
                     training_labels.append(False)
     return training_data, training_labels
 
+def append_training_data_from_trial(seeds, training_data, training_labels):
+
+    activations, attempted_activations = simulate_activations(G, seeds, edge_probs)
+
+    for node, attempts in enumerate(attempted_activations):
+        if attempts > 0:
+            training_data.append(feature_matrix[node])
+            training_labels.append(activations[node])
+
+        if attempts > 1:
+            for _ in range(int(attempts) - 1):
+                training_data.append(feature_matrix[node])
+                training_labels.append(False)
+
+    return training_data, training_labels
+
 if __name__ == "__main__":
     numberOfFeatures = 200
     numberOfNodes = 7420
     numberOfEdges = 115276
-    numberOfTrials = 2
-    seeds = [1, 10, 20, 30, 40, 50, 60, 70]
+    numberOfTrials = 4
+    seedset = [1, 10, 20, 30, 40, 50, 60, 70]
+    logisticRegr = LogisticRegression(fit_intercept=False, warm_start=True)
 
     G, feature_matrix = prep.generate_graph_with_features(numberOfNodes, numberOfEdges, numberOfFeatures)  #randomgraph false, filename = 'vk_mv.txt'
     alphas = prep.generate_alphas(numberOfFeatures)
@@ -168,16 +185,32 @@ if __name__ == "__main__":
 
     edge_probs = get_edge_probabilities(feature_matrix, parameters)
 
-    training_data, training_labels = get_training_data_from_trials(seeds, numberOfTrials)
+    training_data = []
+    training_labels = []
+
+    averageProbabilityDetoriation = []
+
+    for _ in range(numberOfTrials):
+        training_data, training_labels = append_training_data_from_trial(seedset, training_data, training_labels)
+        print(len(training_labels))
+        logisticRegr.fit(training_data, training_labels)
+        predictedProbs = get_edge_probabilities(feature_matrix, logisticRegr.coef_[0])
+        averageProbabilityDetoriation.append(np.mean(np.abs(edge_probs - predictedProbs)))
+    print(averageProbabilityDetoriation)
+    plt.plot(np.arange(numberOfTrials), averageProbabilityDetoriation, 'g^')
+    plt.show()
+
+
+
+    """
+    training_data = np.array(training_data)
+    training_labels = np.array(training_labels)
 
     print('shape of training data was: ', np.array(training_data).shape)
 
     print('max number of features: ', max(training_data.sum(axis=1)))
 
     print('average edge prob was: ', sum(edge_probs)/numberOfNodes)
-
-    logisticRegr = LogisticRegression(fit_intercept=False)
-    logisticRegr.fit(training_data, training_labels)
 
     print('actual params: ', parameters)
     print('predicted params: ', logisticRegr.coef_)
@@ -191,3 +224,4 @@ if __name__ == "__main__":
 
     #print((logisticRegr.predict_proba(training_data)).mean())
     #print(mini_batch_grad_descent(training_data, training_labels))
+    """
