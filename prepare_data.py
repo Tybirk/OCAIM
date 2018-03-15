@@ -37,7 +37,7 @@ def get_feature_matrix(filename, numberOfNodes, numberOfFeatures):
     return feature_matrix
 
 def generate_alphas(numberOfFeatures):
-    alphas = np.random.randint(-5, 5, numberOfFeatures)
+    alphas = np.random.randint(-4, 10, numberOfFeatures)
     #alphas = np.ones(numberOfFeatures)
     #for i in range(int(np.floor(numberOfFeatures/2))):
         #alphas[i*2] += 1
@@ -82,14 +82,15 @@ def create_feature_matrix(numberOfNodes, numberOfFeatures):
     feature_matrix = np.insert(feature_matrix, 0, 1, axis=1) #First column consists on ones
     return feature_matrix
 
-def generate_graph_with_features(numberOfNodes, numberOfEdges, numberOfFeatures, RandomGraph = True, filename=None):
+def generate_graph_with_features(numberOfNodes, numberOfEdges, numberOfFeatures, RandomGraph = True, filenameGraph=None, filenameMember = None):
     if RandomGraph:
         G = create_graph(numberOfNodes, numberOfEdges)
         feature_matrix = create_feature_matrix(numberOfNodes, numberOfFeatures)
     else:
-        G = read_graph(filename)
-        feature_matrix = get_feature_matrix(filename, numberOfNodes, numberOfFeatures)
+        G = read_graph(filenameGraph)
+        feature_matrix = get_feature_matrix(filenameMember, numberOfNodes, numberOfFeatures)
     return G, feature_matrix
+
 if __name__ == "__main__":
     print(get_feature_matrix('vk_mem.txt', 7420, 3882))
     print(generate_alphas(3882))

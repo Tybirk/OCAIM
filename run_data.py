@@ -7,7 +7,9 @@ import numpy as np
 import math
 import prepare_data as prep
 from sklearn.linear_model import LogisticRegression
+import matplotlib
 import matplotlib.pyplot as plt
+
 
 
 def sigmoid(x):
@@ -88,13 +90,13 @@ def mini_batch_grad_descent(X, y, w=None, reg=0, lr=0.1, batch_size=16, epochs=1
     return w
 
 
-def get_edge_probabilities(feature_matrix, parameters):
+def get_edge_probabilities(feature_mat, parameters):
     """
     :param feature_matrix:
     :param parameters: beta and alphas in one list
     :return: ingoing edge probabilities for each node
     """
-    return sigmoid(feature_matrix @ parameters)
+    return sigmoid(feature_mat @ parameters)
 
 
 def simulate_activations(G, seeds, edge_probs):
@@ -121,11 +123,11 @@ def simulate_activations(G, seeds, edge_probs):
     return activations, attempted_activations
 
 
-def divide_rows_by_mean(feature_matrix):
-    for i in range(feature_matrix.shape[0]):
-        rowsum = np.sum(feature_matrix[i, 1:])
+def divide_rows_by_mean(feature_mat):
+    for i in range(feature_mat.shape[0]):
+        rowsum = np.sum(feature_mat[i, 1:])
         if rowsum > 0:
-            feature_matrix[i, 1:] = feature_matrix[i, 1:]/rowsum
+            feature_mat[i, 1:] = feature_mat[i, 1:]/rowsum
 
 
 def get_training_data_from_trials(seeds, trials):
@@ -148,56 +150,112 @@ def get_training_data_from_trials(seeds, trials):
                     training_labels.append(False)
     return training_data, training_labels
 
-def append_training_data_from_trial(seeds, training_data, training_labels):
 
-    activations, attempted_activations = simulate_activations(G, seeds, edge_probs)
+def append_training_data_from_trial(seeds, training_data, training_labels, feature_mat, current_edge_prob):
+
+    activations, attempted_activations = simulate_activations(G, seeds, current_edge_prob)
 
     for node, attempts in enumerate(attempted_activations):
         if attempts > 0:
-            training_data.append(feature_matrix[node])
+            training_data.append(feature_mat[node])
             training_labels.append(activations[node])
 
         if attempts > 1:
             for _ in range(int(attempts) - 1):
-                training_data.append(feature_matrix[node])
+                training_data.append(feature_mat[node])
                 training_labels.append(False)
 
     return training_data, training_labels
 
+
+def greedy(G, feature_mat, messageSize, seeds, currentParameters):
+    message = np.zeros(messageSize)
+    message[0] = 1
+    bestMessage = list(message)
+
+    for i in range(messageSize):
+
+        currentResult = 0
+        index = 0
+        for feature in range(1, feature_mat.shape(1)):
+            index += 1
+            if message[feature] != 1:
+                message[feature] = 1
+                if bestMessage[feature-1] != 1:
+                    message[feature-1] = 0
+
+            current_feature_mat = np.array(feature_mat) * message
+            edge_probs = get_edge_probabilities(current_feature_mat, currentParameters)
+            activations = simulate_activations(G, seeds, edge_probs)[0]
+            result = sum(activations)
+
+            if result > currentResult:
+                currentResult = result
+                bestIndex = index
+
+        bestMessage[bestIndex] = 1
+
+    return bestMessage
+
+
+
+
+
 if __name__ == "__main__":
-    numberOfFeatures = 200
+    numberOfFeatures = 200   ##3882
     numberOfNodes = 7420
     numberOfEdges = 115276
-    numberOfTrials = 4
-    seedset = [1, 10, 20, 30, 40, 50, 60, 70]
+    numberOfTrials = 5
+    seedset = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90]
     logisticRegr = LogisticRegression(fit_intercept=False, warm_start=True)
 
-    G, feature_matrix = prep.generate_graph_with_features(numberOfNodes, numberOfEdges, numberOfFeatures)  #randomgraph false, filename = 'vk_mv.txt'
+    G, feature_matrix = prep.generate_graph_with_features(numberOfNodes, numberOfEdges, numberOfFeatures) #RandomGraph=False, filenameGraph = 'vk_mv.txt', filenameMember='vk_mem.txt')
     alphas = prep.generate_alphas(numberOfFeatures)
-    beta = -2
+    beta = -4
     parameters = np.insert(alphas, 0, beta)
 
-    feature_matrix = feature_matrix[:, :numberOfFeatures]  ##Extracting subset of features
+    feature_matrix = np.array(feature_matrix[:, :numberOfFeatures])  ##Extracting subset of features
     parameters = parameters[:numberOfFeatures]
 
     #DO AVERAGING ON ROWS SUCH THAT IT DOES NOT MATTER THAT YOU LIKE MANY FEATURES
     divide_rows_by_mean(feature_matrix)
 
     edge_probs = get_edge_probabilities(feature_matrix, parameters)
-
+    print(edge_probs)
+    print(np.array(edge_probs).mean(), np.array(edge_probs).max(), np.array(edge_probs).min())
     training_data = []
     training_labels = []
-
     averageProbabilityDetoriation = []
+    current_params = np.ones(numberOfFeatures + 1)
 
-    for _ in range(numberOfTrials):
-        training_data, training_labels = append_training_data_from_trial(seedset, training_data, training_labels)
-        print(len(training_labels))
-        logisticRegr.fit(training_data, training_labels)
-        predictedProbs = get_edge_probabilities(feature_matrix, logisticRegr.coef_[0])
-        averageProbabilityDetoriation.append(np.mean(np.abs(edge_probs - predictedProbs)))
+    for _ in range(5):
+        for k in range(numberOfTrials):
+            msg = np.zeros(numberOfFeatures)
+            msg[0] = 1
+            msg[k + 1:(k + 1) * 40] = 1
+
+            current_feature_matrix = np.array(feature_matrix) * msg
+            current_probs = get_edge_probabilities(current_feature_matrix, parameters)
+
+            print(np.array(current_probs).mean())
+
+            labelLength = len(training_labels)
+            training_data, training_labels = append_training_data_from_trial(seedset, training_data, training_labels,
+                                                                             current_feature_matrix, current_probs)
+            print(len(training_labels))
+
+            logisticRegr.fit(training_data, training_labels)
+            current_params = logisticRegr.coef_[0]
+
+            predictedProbs = get_edge_probabilities(feature_matrix, logisticRegr.coef_[0])
+            averageProbabilityDetoriation.append(np.mean(np.abs(edge_probs - predictedProbs)))
+
     print(averageProbabilityDetoriation)
-    plt.plot(np.arange(numberOfTrials), averageProbabilityDetoriation, 'g^')
+    plt.plot(np.arange(numberOfTrials*2), averageProbabilityDetoriation, 'g^')
+    plt.ylabel("Average error in probability estimate")
+    plt.xlabel("Round")
+    plt.savefig('example.pdf')
+    plt.savefig('example.pgf')
     plt.show()
 
 
