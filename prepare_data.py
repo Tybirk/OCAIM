@@ -37,7 +37,7 @@ def get_feature_matrix(filename, numberOfNodes, numberOfFeatures):
     return feature_matrix
 
 def generate_alphas(numberOfFeatures):
-    alphas = np.random.randint(-4, 10, numberOfFeatures)
+    alphas = np.random.randint(-5, 5, numberOfFeatures)
     #alphas = np.ones(numberOfFeatures)
     #for i in range(int(np.floor(numberOfFeatures/2))):
         #alphas[i*2] += 1

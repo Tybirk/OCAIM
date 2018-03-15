@@ -11,7 +11,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 
-
 def sigmoid(x):
     logi = np.zeros(x.shape)
     logi = 1 / (1 + np.exp(-x))
@@ -169,49 +168,55 @@ def append_training_data_from_trial(seeds, training_data, training_labels, featu
 
 
 def greedy(G, feature_mat, messageSize, seeds, currentParameters):
-    message = np.zeros(messageSize)
+    message = np.zeros(feature_mat.shape[1])
     message[0] = 1
     bestMessage = list(message)
+    numberFeatures = feature_mat.shape[1]
+    print(numberFeatures)
 
     for i in range(messageSize):
-
         currentResult = 0
         index = 0
-        for feature in range(1, feature_mat.shape(1)):
+        message = list(bestMessage)
+        for feature in range(1, numberFeatures):
             index += 1
+
+            if bestMessage[feature-1] != 1:
+                message[feature-1] = 0
+
             if message[feature] != 1:
                 message[feature] = 1
-                if bestMessage[feature-1] != 1:
-                    message[feature-1] = 0
 
-            current_feature_mat = np.array(feature_mat) * message
-            edge_probs = get_edge_probabilities(current_feature_mat, currentParameters)
-            activations = simulate_activations(G, seeds, edge_probs)[0]
-            result = sum(activations)
+                assert(sum(message) == 2 + i)
 
-            if result > currentResult:
-                currentResult = result
-                bestIndex = index
+                current_feature_mat = np.array(feature_mat) * message
+                edge_prob = get_edge_probabilities(current_feature_mat, currentParameters)
+
+                activations = simulate_activations(G, seeds, edge_prob)[0].values()
+                result = sum(activations)
+
+
+
+                if result > currentResult:
+                    currentResult = result
+                    bestIndex = index
 
         bestMessage[bestIndex] = 1
 
     return bestMessage
 
 
-
-
-
 if __name__ == "__main__":
     numberOfFeatures = 200   ##3882
     numberOfNodes = 7420
     numberOfEdges = 115276
-    numberOfTrials = 5
+    numberOfTrials = 20
     seedset = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90]
     logisticRegr = LogisticRegression(fit_intercept=False, warm_start=True)
 
     G, feature_matrix = prep.generate_graph_with_features(numberOfNodes, numberOfEdges, numberOfFeatures) #RandomGraph=False, filenameGraph = 'vk_mv.txt', filenameMember='vk_mem.txt')
     alphas = prep.generate_alphas(numberOfFeatures)
-    beta = -4
+    beta = -2
     parameters = np.insert(alphas, 0, beta)
 
     feature_matrix = np.array(feature_matrix[:, :numberOfFeatures])  ##Extracting subset of features
@@ -228,11 +233,11 @@ if __name__ == "__main__":
     averageProbabilityDetoriation = []
     current_params = np.ones(numberOfFeatures + 1)
 
-    for _ in range(5):
+    for _ in range(1):
         for k in range(numberOfTrials):
             msg = np.zeros(numberOfFeatures)
             msg[0] = 1
-            msg[k + 1:(k + 1) * 40] = 1
+            msg[k + 1:(k + 1) * 10] = 1
 
             current_feature_matrix = np.array(feature_matrix) * msg
             current_probs = get_edge_probabilities(current_feature_matrix, parameters)
@@ -240,6 +245,7 @@ if __name__ == "__main__":
             print(np.array(current_probs).mean())
 
             labelLength = len(training_labels)
+            print(sum(training_labels))
             training_data, training_labels = append_training_data_from_trial(seedset, training_data, training_labels,
                                                                              current_feature_matrix, current_probs)
             print(len(training_labels))
@@ -247,11 +253,23 @@ if __name__ == "__main__":
             logisticRegr.fit(training_data, training_labels)
             current_params = logisticRegr.coef_[0]
 
-            predictedProbs = get_edge_probabilities(feature_matrix, logisticRegr.coef_[0])
+            predictedProbs = get_edge_probabilities(feature_matrix, current_params)
             averageProbabilityDetoriation.append(np.mean(np.abs(edge_probs - predictedProbs)))
 
+    bestMsg = greedy(G, feature_matrix, 4, seedset, current_params)
+
+    print('length of best msg: ', sum(bestMsg))
+
+    print(bestMsg)
+    current_feature_matrix = np.array(feature_matrix) * bestMsg
+
+    bestMsgEdgeProbs = get_edge_probabilities(current_feature_matrix, parameters)
+    print(np.array(bestMsgEdgeProbs).mean())
+    activated = simulate_activations(G, seedset, bestMsgEdgeProbs)[0].values()
+    print('Totally activated: ', sum(activated))
+
     print(averageProbabilityDetoriation)
-    plt.plot(np.arange(numberOfTrials*2), averageProbabilityDetoriation, 'g^')
+    plt.plot(np.arange(numberOfTrials*1), averageProbabilityDetoriation, 'g^')
     plt.ylabel("Average error in probability estimate")
     plt.xlabel("Round")
     plt.savefig('example.pdf')
