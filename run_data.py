@@ -166,6 +166,15 @@ def append_training_data_from_trial(seeds, training_data, training_labels, featu
 
     return training_data, training_labels
 
+def get_parameter_std_deviation(feature_mat, pred_probs):
+    pred_probas = np.array(pred_probs)
+    V = pred_probas*(1-pred_probas)
+    cov_mat = np.linalg.inv(feature_mat.T @ (feature_mat * V[:,np.newaxis]))
+
+    return np.sqrt(np.diag(cov_mat))
+
+    #https://stats.stackexchange.com/questions/89484/how-to-compute-the-standard-errors-of-a-logistic-regressions-coefficients
+
 
 def greedy(G, feature_mat, messageSize, seeds, currentParameters):
     message = np.zeros(feature_mat.shape[1])
@@ -207,10 +216,10 @@ def greedy(G, feature_mat, messageSize, seeds, currentParameters):
 
 
 if __name__ == "__main__":
-    numberOfFeatures = 200   ##3882
+    numberOfFeatures = 50  ##3882
     numberOfNodes = 7420
     numberOfEdges = 115276
-    numberOfTrials = 20
+    numberOfTrials = 5
     seedset = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90]
     logisticRegr = LogisticRegression(fit_intercept=False, warm_start=True)
 
@@ -239,6 +248,7 @@ if __name__ == "__main__":
             msg[0] = 1
             msg[k + 1:(k + 1) * 10] = 1
 
+
             current_feature_matrix = np.array(feature_matrix) * msg
             current_probs = get_edge_probabilities(current_feature_matrix, parameters)
 
@@ -255,8 +265,14 @@ if __name__ == "__main__":
 
             predictedProbs = get_edge_probabilities(feature_matrix, current_params)
             averageProbabilityDetoriation.append(np.mean(np.abs(edge_probs - predictedProbs)))
+    probs = logisticRegr.predict_proba(training_data)
+    probs = probs[:,0]
 
-    bestMsg = greedy(G, feature_matrix, 4, seedset, current_params)
+    standard_dev = get_parameter_std_deviation(np.array(training_data), np.array(probs))
+    print('standard dev: ', standard_dev)
+
+
+    bestMsg = greedy(G, feature_matrix, 2, seedset, current_params)
 
     print('length of best msg: ', sum(bestMsg))
 
