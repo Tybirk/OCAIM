@@ -150,7 +150,7 @@ def get_training_data_from_trials(seeds, trials):
     return training_data, training_labels
 
 
-def append_training_data_from_trial(seeds, training_data, training_labels, feature_mat, current_edge_prob):
+def append_training_data_from_trial(G, seeds, training_data, training_labels, feature_mat, current_edge_prob):
 
     activations, attempted_activations = simulate_activations(G, seeds, current_edge_prob)
 
@@ -166,6 +166,7 @@ def append_training_data_from_trial(seeds, training_data, training_labels, featu
 
     return training_data, training_labels
 
+
 def get_parameter_std_deviation(feature_mat, pred_probs):
     pred_probas = np.array(pred_probs)
     V = pred_probas*(1-pred_probas)
@@ -176,7 +177,47 @@ def get_parameter_std_deviation(feature_mat, pred_probs):
     #https://stats.stackexchange.com/questions/89484/how-to-compute-the-standard-errors-of-a-logistic-regressions-coefficients
 
 
-def greedy(G, feature_mat, messageSize, seeds, currentParameters):
+def get_initial_training_data(G, featuresPerTrial, feature_mat, true_parameters, logistic_reg, training_dat = [], training_labs = []):
+    numberOfFeatures = np.array(feature_mat).shape[1]
+
+    numberOfRounds = int(math.ceil(numberOfFeatures/featuresPerTrial))
+    for k in range(numberOfRounds):
+        msg = np.zeros(numberOfFeatures)
+        msg[0] = 1
+        msg[k + 1: ((k + 1) * featuresPerTrial)%numberOfFeatures] = 1
+
+        current_feature_matrix = np.array(feature_mat) * msg
+        current_probs = get_edge_probabilities(current_feature_matrix, true_parameters)
+
+        training_dat, training_labs = append_training_data_from_trial(G, seedset, training_dat, training_labs,
+                                                                             current_feature_matrix, current_probs)
+
+    return training_dat, training_labs
+
+
+def exploitation_only(G, feature_mat, message_size, seeds, numberOfTrials, true_parameters, logistic_reg, training_dat, training_labs, numberOfMCsims = 1):
+    for i in range(numberOfTrials):
+        logistic_reg.fit(training_dat, training_labs)
+        current_params = logisticRegr.coef_[0]
+        message = greedy(G,feature_mat, message_size, seeds, current_params, numberOfMCsims)
+
+        current_feature_mat = np.array(feature_mat) * message
+        current_edge_prob = get_edge_probabilities(current_feature_matrix, true_parameters)
+
+        training_dat, training_labs = append_training_data_from_trial(G, seeds, training_dat, training_labs, current_feature_mat, current_edge_prob)
+        print('Total spread after {0} trials was: ,'.format(i), sum(training_labs))
+
+def explore_and_exploit():
+
+
+    current_probs = get_edge_probabilities(current_feature_matrix, parameters)
+
+    print('The average edge probabilities with the current message: ', np.array(current_probs).mean())
+
+    labelLength = len(training_labels)
+    print('Total number of activations after {0} rounds was: '.format(k), sum(training_labels))
+
+def greedy(G, feature_mat, messageSize, seeds, currentParameters, numberMCsims = 1):
     message = np.zeros(feature_mat.shape[1])
     message[0] = 1
     bestMessage = list(message)
@@ -196,13 +237,16 @@ def greedy(G, feature_mat, messageSize, seeds, currentParameters):
             if message[feature] != 1:
                 message[feature] = 1
 
+                activations = []
+
                 assert(sum(message) == 2 + i)
 
                 current_feature_mat = np.array(feature_mat) * message
                 edge_prob = get_edge_probabilities(current_feature_mat, currentParameters)
 
-                activations = simulate_activations(G, seeds, edge_prob)[0].values()
-                result = sum(activations)
+                for _ in range(numberMCsims):
+                    activations.append(simulate_activations(G, seeds, edge_prob)[0].values())
+                result = sum(activations[0])/numberMCsims
 
 
 
@@ -220,10 +264,12 @@ if __name__ == "__main__":
     numberOfNodes = 7420
     numberOfEdges = 115276
     numberOfTrials = 5
+    number_of_MC_sims = 1
     seedset = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90]
     logisticRegr = LogisticRegression(fit_intercept=False, warm_start=True)
 
     G, feature_matrix = prep.generate_graph_with_features(numberOfNodes, numberOfEdges, numberOfFeatures) #RandomGraph=False, filenameGraph = 'vk_mv.txt', filenameMember='vk_mem.txt')
+
     alphas = prep.generate_alphas(numberOfFeatures)
     beta = -2
     parameters = np.insert(alphas, 0, beta)
@@ -252,19 +298,19 @@ if __name__ == "__main__":
             current_feature_matrix = np.array(feature_matrix) * msg
             current_probs = get_edge_probabilities(current_feature_matrix, parameters)
 
-            print(np.array(current_probs).mean())
+            print('The average edge probabilities with the current message: ', np.array(current_probs).mean())
 
             labelLength = len(training_labels)
-            print(sum(training_labels))
+            print('Total number of activations after {0} rounds was: '.format(k), sum(training_labels))
             training_data, training_labels = append_training_data_from_trial(seedset, training_data, training_labels,
                                                                              current_feature_matrix, current_probs)
-            print(len(training_labels))
 
             logisticRegr.fit(training_data, training_labels)
             current_params = logisticRegr.coef_[0]
 
-            predictedProbs = get_edge_probabilities(feature_matrix, current_params)
-            averageProbabilityDetoriation.append(np.mean(np.abs(edge_probs - predictedProbs)))
+            averageProbabilityDetoriation.append(np.mean(np.abs(parameters - current_params)))
+
+
     probs = logisticRegr.predict_proba(training_data)
     probs = probs[:,0]
 
@@ -272,7 +318,7 @@ if __name__ == "__main__":
     print('standard dev: ', standard_dev)
 
 
-    bestMsg = greedy(G, feature_matrix, 2, seedset, current_params)
+    bestMsg = greedy(G, feature_matrix, 2, seedset, current_params, number_of_MC_sims)
 
     print('length of best msg: ', sum(bestMsg))
 
