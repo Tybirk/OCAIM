@@ -89,13 +89,17 @@ def mini_batch_grad_descent(X, y, w=None, reg=0, lr=0.1, batch_size=16, epochs=1
     return w
 
 
-def get_edge_probabilities(feature_mat, parameters):
+def get_edge_probabilities(feature_mat, parameters, linear = False):
     """
     :param feature_matrix:
     :param parameters: beta and alphas in one list
     :return: ingoing edge probabilities for each node
     """
-    return sigmoid(feature_mat @ parameters)
+    if not linear:
+        return sigmoid(feature_mat @ parameters)
+    else:
+        edge_probs = [max(min(feature_mat[i, :]@parameters, 1),0) for i in range(feature_mat.shape[0])]
+        return edge_probs
 
 
 def simulate_activations(G, seeds, edge_probs):
@@ -168,10 +172,14 @@ def append_training_data_from_trial(G, seeds, training_data, training_labels, fe
 
 
 def get_parameter_std_deviation(training_dat, pred_probs):
+    ##Return standard deviation if possible, otherwise set standard deviation large
+    #training_dat.sum(axis=1)
+
     training_dat = np.array(training_dat)
     pred_probas = np.array(pred_probs)
     V = pred_probas*(1-pred_probas)
     cov_mat = np.linalg.inv(training_dat.T @ (training_dat * V[:,np.newaxis]))
+    print('Standard devs: ', np.sqrt(np.diag(cov_mat)).sum())
 
     return np.sqrt(np.diag(cov_mat))
 
@@ -201,23 +209,26 @@ def get_initial_training_data(G, featuresPerTrial, feature_mat, true_parameters,
 
 
 def exploitation_only(G, feature_mat, message_size, seeds, numberOfTrials, true_parameters, logistic_reg, training_dat, training_labs, numberOfMCsims = 1):
-    sizeOfInitialData = len(training_labs)
+    sizeOfInitialData = sum(training_labs)
     spreadData = np.zeros(numberOfTrials)
     for i in range(numberOfTrials):
         logistic_reg.fit(training_dat, training_labs)
         current_params = logisticRegr.coef_[0]
         message = greedy(G,feature_mat, message_size, seeds, current_params, numberOfMCsims)
 
+        print('message was: ', np.where(np.array(message) > 0))
+
         current_feature_mat = np.array(feature_mat) * message
         current_edge_prob = get_edge_probabilities(current_feature_mat, true_parameters)
 
         training_dat, training_labs = append_training_data_from_trial(G, seeds, training_dat, training_labs, current_feature_mat, current_edge_prob)
-        print('Total spread after {0} trials was: ,'.format(i), sum(training_labs) - sizeOfInitialData)
+        print('Total spread after {0} trials was: '.format(i), sum(training_labs) - sizeOfInitialData)
         spreadData[i] = sum(training_labs) - sizeOfInitialData
     return current_params, training_dat, training_labs, spreadData
 
+
 def explore_and_exploit(G, feature_mat, message_size, seeds, numberOfTrials, true_parameters, logistic_reg, training_dat, training_labs, numberOfMCsims = 1, c=1):
-    sizeOfInitialData = len(training_labs)
+    sizeOfInitialData = sum(training_labs)
     spreadData = np.zeros(numberOfTrials)
     for i in range(numberOfTrials):
         logistic_reg.fit(training_dat, training_labs)
@@ -229,16 +240,36 @@ def explore_and_exploit(G, feature_mat, message_size, seeds, numberOfTrials, tru
 
         message = greedy(G,feature_mat, message_size, seeds, current_params, numberOfMCsims)
 
+        print('message was: ', np.where(np.array(message) > 0))
+
         current_feature_mat = np.array(feature_mat) * message
         current_edge_prob = get_edge_probabilities(current_feature_mat, true_parameters)
 
         training_dat, training_labs = append_training_data_from_trial(G, seeds, training_dat, training_labs, current_feature_mat, current_edge_prob)
-        print('Total spread after {0} trials was: ,'.format(i), sum(training_labs) - sizeOfInitialData)
+        print('Total spread after {0} trials was: '.format(i), sum(training_labs) - sizeOfInitialData)
         spreadData[i] = sum(training_labs) - sizeOfInitialData
     return current_params, training_dat, training_labs, spreadData
 
+def exploit_perfect_knowledge(G, feature_mat, message_size, seeds, numberOfTrials, true_parameters, numberOfMCsims = 1, c = 1):
+    spreadData = np.zeros(numberOfTrials)
+    training_dat = []
+    training_labs = []
+    for i in range(numberOfTrials):
 
-def greedy(G, feature_mat, messageSize, seeds, currentParameters, numberMCsims = 1):
+        message = greedy(G, feature_mat, message_size, seeds, true_parameters, numberOfMCsims)
+        print('message was: ', np.where(np.array(message) > 0))
+
+        current_feature_mat = np.array(feature_mat) * message
+        current_edge_prob = get_edge_probabilities(current_feature_mat, true_parameters)
+
+        training_dat, training_labs = append_training_data_from_trial(G, seeds, training_dat, training_labs,
+                                                                      current_feature_mat, current_edge_prob)
+        print('Total spread after {0} trials was: '.format(i), sum(training_labs))
+        spreadData[i] = sum(training_labs)
+    return current_params, training_dat, training_labs, spreadData
+
+
+def greedy(G, feature_mat, messageSize, seeds, currentParameters, numberMCsims = 1, linear=False):
     message = np.zeros(feature_mat.shape[1])
     message[0] = 1
     bestMessage = list(message)
@@ -260,39 +291,76 @@ def greedy(G, feature_mat, messageSize, seeds, currentParameters, numberMCsims =
                 activations = []
 
                 assert(sum(message) == 2 + i)
-
                 current_feature_mat = np.array(feature_mat) * message
-                edge_prob = get_edge_probabilities(current_feature_mat, currentParameters)
-
+                if not linear:
+                    edge_prob = get_edge_probabilities(current_feature_mat, currentParameters)
+                else:
+                    theta, M_inverse, sigma, c = currentParameters
+                    edge_prob = [max(min((current_feature_mat[i, :].T @ theta + c * np.sqrt(current_feature_mat[i, :].T @ M_inverse @ current_feature_mat[i, :])), 1), 0) for i in range(feature_mat.shape[0])]
                 for _ in range(numberMCsims):
                     activations.append(simulate_activations(G, seeds, edge_prob)[0].values())
                 result = sum(activations[0])/numberMCsims
-
-
 
                 if result > currentResult:
                     currentResult = result
                     bestIndex = index
 
         bestMessage[bestIndex] = 1
-
+    print(edge_prob)
     return bestMessage
 
 
+def OCAIMLinUCB(G, feature_mat, message_size, seeds, number_of_trials, true_parameters, training_dat, training_labs, number_mc_sims=1, sigma=4, c=0.05):
+    sizeOfInitialData = sum(training_labs)
+    spreadData = np.zeros(numberOfTrials)
+    n = feature_mat.shape[1]
+    B = np.zeros(n)
+    M = np.identity(n)
+    M_inverse = np.identity(n)
+    for j in range(number_of_trials):
+        #M_inverse = M_inverse - (M_inverse*)
+        theta = 1/sigma**2 * M_inverse @ B
+        current_params = [theta, M_inverse, sigma, c]
+        message = greedy(G, feature_mat, message_size, seeds, current_params, numberMCsims= number_mc_sims, linear=True)
+
+        print('message was: ', np.where(np.array(message) > 0))
+
+        current_feature_mat = np.array(feature_mat) * message
+        current_edge_prob = get_edge_probabilities(current_feature_mat, true_parameters, linear=True)
+        print(current_edge_prob)
+        len_old_training_data = len(training_labs)
+        training_dat, training_labs = append_training_data_from_trial(G, seeds, training_dat, training_labs,
+                                                                      current_feature_mat, current_edge_prob)
+        print('Total spread after {0} trials was: '.format(j), sum(training_labs) - sizeOfInitialData)
+        spreadData[j] = sum(training_labs) - sizeOfInitialData
+
+        for i, edge in enumerate(np.array(training_dat)[len_old_training_data:, :]):
+            M_inverse -= (M_inverse @ np.outer(edge, edge) @ M_inverse)/(edge.T @ M_inverse @ edge + sigma**2)
+            #M += 1/sigma**2 * edge @ edge.T
+            if training_labs[len_old_training_data+i]:
+                B += edge
+
+    return training_dat, training_labs, spreadData
+
+
+
+
 if __name__ == "__main__":
-    numberOfFeatures = 50  ##3882
+    numberOfFeatures = 60  ##3882
     numberOfNodes = 7420
     numberOfEdges = 115276
     numberOfTrials = 10
-    number_of_MC_sims = 1
-    messageSize = 5
+    number_of_MC_sims = 2
+    messageSize = 3
     seedset = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90]
     logisticRegr = LogisticRegression(fit_intercept=False, warm_start=True)
 
     G, feature_matrix = prep.generate_graph_with_features(numberOfNodes, numberOfEdges, numberOfFeatures) #RandomGraph=False, filenameGraph = 'vk_mv.txt', filenameMember='vk_mem.txt')
-
+    #G, feature_matrix = prep.generate_graph_with_features(numberOfNodes, numberOfEdges,
+     #                                                     numberOfFeatures, RandomGraph=False,
+      #                                                    filenameGraph = 'vk_mv.txt', filenameMember='vk_mem.txt')
     alphas = prep.generate_alphas(numberOfFeatures)
-    beta = -2
+    beta = 0.04 #-3
     parameters = np.insert(alphas, 0, beta)
 
     feature_matrix = np.array(feature_matrix[:, :numberOfFeatures])  ##Extracting subset of features
@@ -301,16 +369,23 @@ if __name__ == "__main__":
     #DO AVERAGING ON ROWS SUCH THAT IT DOES NOT MATTER THAT YOU LIKE MANY FEATURES
     divide_rows_by_mean(feature_matrix)
 
+    training_data, training_labels, spreadData2 = OCAIMLinUCB(G, feature_matrix, messageSize, seedset, numberOfTrials, parameters, [], [])
+    plt.plot(np.arange(numberOfTrials), spreadData2, 'bs')
+    plt.show()
+
     training_data, training_labels = get_initial_training_data(G, messageSize, feature_matrix, parameters, logisticRegr)
-    current_params, training_data, training_labels, spreadData1 = exploitation_only(G, feature_matrix, messageSize, seedset, numberOfTrials, parameters, logisticRegr, training_data, training_labels)
+    current_params, training_data, training_labels, spreadData1 = exploitation_only(G, feature_matrix, messageSize, seedset, numberOfTrials, parameters, logisticRegr, training_data, training_labels, numberOfMCsims=number_of_MC_sims)
 
     logisticRegr = LogisticRegression(fit_intercept=False, warm_start=True)  ##RESET
 
     training_data, training_labels = get_initial_training_data(G, messageSize, feature_matrix, parameters, logisticRegr)
-    current_params, training_data, training_labels, spreadData2 = explore_and_exploit(G, feature_matrix, messageSize, seedset, numberOfTrials, parameters, logisticRegr, training_data, training_labels)
+    current_params, training_data, training_labels, spreadData2 = explore_and_exploit(G, feature_matrix, messageSize, seedset, numberOfTrials, parameters, logisticRegr, training_data, training_labels, numberOfMCsims=number_of_MC_sims, c=1)
+
+    current_params, training_data, training_labels, spreadData3 = exploit_perfect_knowledge(G, feature_matrix, messageSize, seedset, numberOfTrials, parameters, number_of_MC_sims)
 
     plt.plot(np.arange(numberOfTrials), spreadData1, 'g^')
-    plt.plot(np.arange(numberOfTrials), spreadData1, 'bs')
+    plt.plot(np.arange(numberOfTrials), spreadData2, 'bs')
+    plt.plot(np.arange(numberOfTrials), spreadData3, 'rD')
     plt.ylabel("Spread")
     plt.xlabel("Round")
     plt.savefig('example.pdf')

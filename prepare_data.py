@@ -7,7 +7,6 @@ import graph_tool.all as gt
 import time
 
 
-
 def get_feature_matrix(filename, numberOfNodes, numberOfFeatures):
     """
     :param filename:
@@ -28,16 +27,19 @@ def get_feature_matrix(filename, numberOfNodes, numberOfFeatures):
                 if feature not in featureToIndex:
                     featureToIndex[feature] = featureCount
                     featureCount += 1
-
-                feature_matrix[nodeCount, featureToIndex[feature]] +=1
+                if featureToIndex[feature] < numberOfFeatures:
+                    feature_matrix[nodeCount, featureToIndex[feature]] +=1
 
             nodeCount +=1
 
     feature_matrix = np.insert(feature_matrix, 0, 1, axis=1)
     return feature_matrix
 
+
 def generate_alphas(numberOfFeatures):
-    alphas = np.random.randint(-5, 5, numberOfFeatures)
+    #alphas = np.random.randint(-4, 3, numberOfFeatures)
+    #alphas = np.random.uniform(-2, 6, numberOfFeatures)
+    alphas = np.random.uniform(-1, 1, numberOfFeatures)
     #alphas = np.ones(numberOfFeatures)
     #for i in range(int(np.floor(numberOfFeatures/2))):
         #alphas[i*2] += 1
@@ -61,6 +63,7 @@ def read_graph(filename, directed=True):
             G.add_edge(int(d[0]), int(d[1]))
     return G
 
+
 def create_graph(numberOfNodes, numberOfEdges):
     G = nx.DiGraph()
     for i in range(numberOfEdges):
@@ -69,6 +72,7 @@ def create_graph(numberOfNodes, numberOfEdges):
         if rand1 != rand2:
             G.add_edge(rand1, rand2)
     return G
+
 
 def create_feature_matrix(numberOfNodes, numberOfFeatures):
     #feature_matrix = [random.randint(0,1) for i in range(numberOfNodes) for j in range(numberOfFeatures)]
@@ -81,6 +85,7 @@ def create_feature_matrix(numberOfNodes, numberOfFeatures):
 
     feature_matrix = np.insert(feature_matrix, 0, 1, axis=1) #First column consists on ones
     return feature_matrix
+
 
 def generate_graph_with_features(numberOfNodes, numberOfEdges, numberOfFeatures, RandomGraph = True, filenameGraph=None, filenameMember = None):
     if RandomGraph:
