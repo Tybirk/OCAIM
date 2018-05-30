@@ -185,7 +185,12 @@ def get_parameter_std_deviation(training_dat, pred_probs):
     V = pred_probas*(1-pred_probas)
     print(training_dat.shape)
     print(V.shape)
-    cov_mat = np.linalg.inv(training_dat.T @ (training_dat * V[:,np.newaxis]))
+    try:
+        cov_mat = np.linalg.inv(training_dat.T @ (training_dat * V[:,np.newaxis]))
+    except np.linalg.LinAlgError:
+        print("NOT INVERTIBLE")
+        cov_mat = np.linalg.inv(training_dat.T @ (training_dat * V[:,np.newaxis])+ 0.10*np.identity(training_dat.shape[1]))
+    
     print('Standard devs: ', np.sqrt(np.diag(cov_mat)).sum())
 
     return np.sqrt(np.diag(cov_mat))
@@ -261,7 +266,7 @@ def exploit_perfect_knowledge(G, feature_mat, message_size, seeds, numberOfTrial
     spreadData = np.zeros(numberOfTrials)
     training_dat = []
     training_labs = []
-    message = greedy(G, feature_mat, message_size, seeds, true_parameters, numberMCsims=100)
+    message = greedy(G, feature_mat, message_size, seeds, true_parameters, numberMCsims=numberOfMCsims)
     print('best message was: ', np.where(np.array(message) > 0))
     current_feature_mat = np.array(feature_mat) * message
     current_edge_prob = get_edge_probabilities(current_feature_mat, true_parameters)
@@ -303,14 +308,14 @@ def greedy(G, feature_mat, messageSize, seeds, currentParameters, numberMCsims =
                         theta, standard_devs, sigma, c = currentParameters
                         edge_prob = [sigmoid(current_feature_mat[i, :].T @ theta + c * np.sqrt(current_feature_mat[i, :].T @ standard_devs @ current_feature_mat[i, :])) for i in range(feature_mat.shape[0])]
                     else:
-                        edge_prob = get_edge_probabilities(current_feature_mat, currentParameters)
+                        edge_prob = sigmoid(current_feature_mat @ currentParameters)
                 else:
                     theta, M_inverse, sigma, c = currentParameters
                     edge_prob = [max(min((current_feature_mat[i, :].T @ theta + c * np.sqrt(current_feature_mat[i, :].T @ M_inverse @ current_feature_mat[i, :])), 1), 0) for i in range(feature_mat.shape[0])]
-                for _ in range(numberMCsims):
-                    activations.append(simulate_activations(G, seeds, edge_prob)[0].values())
-                result = sum(activations[0])/numberMCsims
-
+                for k in range(numberMCsims):
+                    activations_in_MC_sim = simulate_activations(G, seeds, edge_prob)[0].values()
+                    activations.append(activations_in_MC_sim)
+                result = sum(map(sum, activations))/numberMCsims
                 if result > currentResult:
                     currentResult = result
                     bestIndex = index
@@ -423,7 +428,7 @@ def exploitation_only_pure(G, feature_mat, message_size, seeds, numberOfTrials, 
     spreadData = np.zeros(numberOfTrials)
     logistic_reg.fit(training_dat, training_labs)
     current_params = logisticRegr.coef_[0]
-    message = greedy(G,feature_mat, message_size, seeds, current_params, 100)
+    message = greedy(G,feature_mat, message_size, seeds, current_params, numberOfMCsims)
     current_feature_mat = np.array(feature_mat) * message
     current_edge_prob = get_edge_probabilities(current_feature_mat, true_parameters)
     for i in range(numberOfTrials):
@@ -438,10 +443,10 @@ if __name__ == "__main__":
     numberOfFeatures = 50 ##3882
     numberOfNodes = 7420
     numberOfEdges = 115276
-    numberOfTrials = 100
+    numberOfTrials = 40
     number_of_MC_sims = 10
     messageSize = 2
-    seedset = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90]
+    seedset = [1, 10, 20, 30, 40, 50]#, 60, 70, 80, 90]
     logisticRegr = LogisticRegression(fit_intercept=False, warm_start=True)
 
     #G, feature_matrix = prep.generate_graph_with_features(numberOfNodes, numberOfEdges, numberOfFeatures) #RandomGraph=False, filenameGraph = 'vk_mv.txt', filenameMember='vk_mem.txt')
@@ -501,10 +506,12 @@ if __name__ == "__main__":
             not_invertible = False
         except:
             pass"""
-            
-    for i in range(3):
+    #f, axarr = plt.subplots(2, 2, sharex='col', sharey='row')
+    #f.set_size_inches(7, 5)
+    x = np.arange(numberOfTrials+1)
+    for i in range(1):
         random.seed(1)
-        messageSize = i+1
+        messageSize = i+2
         training_data, training_labels = get_initial_training_data(G, messageSize, feature_matrix, parameters, logisticRegr)
         training_data_2 = list(training_data)
         training_labels_2 = list(training_labels)
@@ -513,36 +520,36 @@ if __name__ == "__main__":
         training_data_4 = list(training_data)
         training_labels_4 = list(training_labels)
         logisticRegr = LogisticRegression(fit_intercept=False, warm_start=True)  ##RESET
-        
-        spreadData6 = exploitation_only_pure(G, feature_matrix, messageSize, seedset, numberOfTrials, parameters,
-                                                                                        logisticRegr, training_data_4,
-                                                                                        training_labels_4,
-                                                                                        numberOfMCsims=number_of_MC_sims)[3]
-
-        #current_params, training_data_3, training_labels_3, 
-        logisticRegr = LogisticRegression(fit_intercept=False, warm_start=False)
-        logisticRegr.fit(training_data_3, training_labels_3)
-        logisticRegr = LogisticRegression(fit_intercept=False, warm_start=True)
-        spreadData4 = explore_and_exploit(G, feature_matrix,
+        spreadData_expl_expl1 = explore_and_exploit(G, feature_matrix,
                                                                                                 messageSize, seedset,
-                                                                                                numberOfTrials, parameters,
+                                                                                                numberOfTrials, list(parameters),
                                                                                                 logisticRegr,
                                                                                                 training_data_3,
                                                                                                 training_labels_3,
                                                                                                 numberOfMCsims=number_of_MC_sims,
                                                                                                 c=1)[3]
+
+        #current_params, training_data_3, training_labels_3, 
+        logisticRegr = LogisticRegression(fit_intercept=False, warm_start=False)
+        logisticRegr.fit(training_data_4, training_labels_4)
+        logisticRegr = LogisticRegression(fit_intercept=False, warm_start=True)
+        spreadData_exploit_pure = exploitation_only_pure(G, feature_matrix, messageSize, seedset, numberOfTrials, list(parameters),
+                                                                                        logisticRegr, training_data_4,
+                                                                                        training_labels_4,
+                                                                                        numberOfMCsims=100)[3]
+        
         
     
         
-        spreadData5 = random_messages(G, feature_matrix, messageSize, seedset, numberOfTrials, parameters)
+        spreadData_random = random_messages(G, feature_matrix, messageSize, seedset, numberOfTrials, list(parameters))
         
         logisticRegr = LogisticRegression(fit_intercept=False, warm_start=False)
         logisticRegr.fit(training_data_2, training_labels_2)
         logisticRegr = LogisticRegression(fit_intercept=False, warm_start=True)
         #training_data_2, training_labels_2, 
-        spreadData2 = explore_and_exploit_2(G, feature_matrix,
+        spreadData_expl_expl2 = explore_and_exploit_2(G, feature_matrix,
                                                                                                 messageSize, seedset,
-                                                                                                numberOfTrials, parameters,
+                                                                                                numberOfTrials, list(parameters),
                                                                                                 logisticRegr,
                                                                                                 training_data_2,
                                                                                                 training_labels_2,
@@ -553,45 +560,103 @@ if __name__ == "__main__":
         logisticRegr = LogisticRegression(fit_intercept=False, warm_start=True)
         
         #current_params, training_data, training_labels, 
-        spreadData1 = exploitation_only(G, feature_matrix, messageSize, seedset, numberOfTrials, parameters,
+        spreadData_exploit = exploitation_only(G, feature_matrix, messageSize, seedset, numberOfTrials, list(parameters),
                                                                                         logisticRegr, training_data,
                                                                                         training_labels,
                                                                                         numberOfMCsims=number_of_MC_sims)[3]
     
         
         #training_data_4, training_labels_4, 
-        spreadData3 = exploit_perfect_knowledge(G, feature_matrix,
+        spreadData_perfect = exploit_perfect_knowledge(G, feature_matrix,
                                                                                 messageSize, seedset,
                                                                                 numberOfTrials, true_parameters,
-                                                                                number_of_MC_sims)[2]
+                                                                                100)[2]
         
 
     
     
-    
+        spreadData_exploit_pure= np.insert(spreadData_exploit_pure,0,0)
+        spreadData_expl_expl1 = np.insert(spreadData_expl_expl1,0,0)
+        spreadData_random = np.insert(spreadData_random,0,0)
+        spreadData_expl_expl2 = np.insert(spreadData_expl_expl2,0,0)
+        spreadData_exploit = np.insert(spreadData_exploit,0,0)
+        spreadData_perfect = np.insert(spreadData_perfect,0,0)
         #training_data_3, training_labels_3, spreadData4 = OCAIMLinUCB(G, feature_matrix, messageSize,
          #                                                                            seedset, numberOfTrials, parameters,
           #                                                                           training_data_3, training_labels_3, hybrid=False,
            #                                                                          linear_parameters=parameters_lin,
             #                                                                         number_mc_sims=number_of_MC_sims)
-    
-        plt.plot(np.arange(numberOfTrials), spreadData1, 'b:') #g^:  exploit
-        plt.plot(np.arange(numberOfTrials), spreadData2, 'g--') #bs-- expl_exploit2
-        plt.plot(np.arange(numberOfTrials), spreadData3, 'r-') #rD-. perfect
-        plt.plot(np.arange(numberOfTrials), spreadData4, 'c-.') #cp-- expl:exploit1
-        plt.plot(np.arange(numberOfTrials), spreadData5, ':') #random
-        plt.plot(np.arange(numberOfTrials), spreadData6, 'y-.') #badexploit
-        plt.ylabel("Accumulated Spread")
-        plt.xlabel("Round")
-        plt.savefig('example_{}.pdf'.format(i+1))
-        #plt.savefig('example_{}.pgf'.format(i+1))
-        plt.show()
-        
-        
-        
-        
-        
+        np.savetxt("spread_explore_pure{0}.csv".format(messageSize), spreadData_exploit_pure, delimiter=",")
+        np.savetxt("spread_expl_expl1{0}.csv".format(messageSize), spreadData_expl_expl1, delimiter=",")
+        np.savetxt("spread_random{0}.csv".format(messageSize), spreadData_random, delimiter=",")
+        np.savetxt("spread_expl_expl2{0}.csv".format(messageSize), spreadData_expl_expl2, delimiter=",")
+        np.savetxt("spread_expl{0}.csv".format(messageSize), spreadData_exploit, delimiter=",")
+        np.savetxt("spread_perfect{0}.csv".format(messageSize), spreadData_perfect, delimiter=",")
+        plt.plot(x, spreadData_exploit_pure, color='C0')
+        plt.plot(x, spreadData_expl_expl1, color='C1')
+        plt.plot(x, spreadData_random, color='C2')
+        plt.plot(x, spreadData_expl_expl2, color='C3')
+        plt.plot(x, spreadData_exploit, color='C4')
+        plt.plot(x, spreadData_perfect, color='C5')
+        plt.show
+        """
+        # row and column sharing
+        if i==0:
+            l1, = axarr[0, 0].plot(x, spreadData_exploit_pure, color='C0', ls="--")
+            l2, = axarr[0, 0].plot(x, spreadData_expl_expl1, color='C1', ls="-.")
+            l3, = axarr[0, 0].plot(x, spreadData_random, color='C2', ls=":")
+            l4, = axarr[0, 0].plot(x, spreadData_expl_expl2, color='C5', ls=":")
+            l5, = axarr[0, 0].plot(x, spreadData_exploit, color='C4', ls="--")
+            l6, = axarr[0, 0].plot(x, spreadData_perfect, color='C3', ls="-")
+            axarr[0, 0].set_title('k = 1')
+        if i==1:
+            axarr[0, 1].plot(x, spreadData_exploit_pure, color='C0', ls="--")
+            axarr[0, 1].plot(x, spreadData_expl_expl1, color='C1', ls="-.")
+            axarr[0, 1].plot(x, spreadData_random, color='C2', ls=":")
+            axarr[0, 1].plot(x, spreadData_expl_expl2, color='C5', ls=":")
+            axarr[0, 1].plot(x, spreadData_exploit, color='C4', ls="--")
+            axarr[0, 1].plot(x, spreadData_perfect, color='C3', ls="-")
+            axarr[0, 1].set_title('k = 2')
+        if i==2:
+            axarr[1, 0].plot(x, spreadData_exploit_pure, color='C0', ls="--")
+            axarr[1, 0].plot(x, spreadData_expl_expl1, color='C1', ls="-.")
+            axarr[1, 0].plot(x, spreadData_random, color='C2', ls=":")
+            axarr[1, 0].plot(x, spreadData_expl_expl2, color='C5', ls=":")
+            axarr[1, 0].plot(x, spreadData_exploit, color='C4', ls="--")
+            axarr[1, 0].plot(x, spreadData_perfect, color='C3', ls="-")
+            axarr[1, 0].set_title('k = 3')
+        if i==3:
+            axarr[1, 1].plot(x, spreadData_exploit_pure, color='C0', ls="--")
+            axarr[1, 1].plot(x, spreadData_expl_expl1, color='C1', ls="-.")
+            axarr[1, 1].plot(x, spreadData_random, color='C2', ls=":")
+            axarr[1, 1].plot(x, spreadData_expl_expl2, color='C5', ls=":")
+            axarr[1, 1].plot(x, spreadData_exploit, color='C4', ls="--")
+            axarr[1, 1].plot(x, spreadData_perfect, color='C3', ls="-")
+            axarr[1, 1].set_title('k = 4')
 
+
+
+        # Fine-tune figure; hide x ticks for top plots and y ticks for right plots
+    for ax in axarr.flat:
+        ax.set(xlabel='Round', ylabel='Accumulated spread')
+    # Hide x labels and tick labels for top plots and y ticks for right plots.
+    for ax in axarr.flat:
+        ax.label_outer()
+    #f.set_size_inches()
+    lgd = plt.figlegend((l1,l2,l3,l4,l5,l6), ("Pure Exploit", "LogiUCB1 c=1", "Random", "LogiUCB2 c=1", "LogiUCB1 c=0", "Full Information"), loc="lower center", bbox_to_anchor = (0,-0.1,1,1), ncol=3,
+            bbox_transform = plt.gcf().transFigure )
+    f.tight_layout() #rect=(0,0,1,0.9)
+    
+
+    plt.savefig('example_{}.pdf'.format(i+1), bbox_extra_artists=(lgd,), bbox_inches='tight')
+    #plt.savefig('example_{}.pgf'.format(i+1))
+    plt.show()
+    """
+        
+        
+        
+        
+        
     """
     edge_probs = get_edge_probabilities(feature_matrix, parameters)
     print(edge_probs)

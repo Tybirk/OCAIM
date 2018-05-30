@@ -40,17 +40,26 @@ def generate_alphas(numberOfFeatures):
     #alphas = np.random.randint(-4, 3, numberOfFeatures)
     #alphas = np.random.uniform(-5, 5, numberOfFeatures)
     alphas = np.ones(numberOfFeatures)
-    alphas[0:5] = -3
-    alphas[5:10] = -2
+    alphas[0:5] = -2
+    alphas[5:10] = -1.5
     alphas[10:15] = -1
     alphas[15:25] = 1
-    alphas[25:35] = 2
-    alphas[35:40] = 3
-    alphas[40-44] = 4
-    alphas[44-47] = 5
-    alphas[47-50] = -4
+    alphas[25:30] = 2
+    alphas[30:35] = 3
+    alphas[35-40] = 1.5
+    alphas[40-44] = 1.5
+    alphas[44-47] = 2.5
+    alphas[47-50] = -2.5
     
-    
+    #alphas[0:5] = -3
+    #alphas[5:10] = -2
+    #alphas[10:15] = -1
+    #alphas[15:25] = 1
+    #alphas[25:35] = 2
+    #alphas[35:40] = 3
+    #alphas[40-44] = 4
+    #alphas[44-47] = 5
+    #alphas[47-50] = -4
     #alphas = np.random.uniform(-1, 1, numberOfFeatures)
     #alphas = np.ones(numberOfFeatures)
     #for i in range(int(np.floor(numberOfFeatures/2))):
@@ -112,3 +121,12 @@ if __name__ == "__main__":
     print(get_feature_matrix('vk_mem.txt', 7420, 3882))
     print(generate_alphas(3882))
     print(sum(get_feature_matrix('vk_mem.txt', 7420, 3882))[1:])
+    G = read_graph('vk_mv.txt', directed=True)
+    Gc = max(nx.strongly_connected_component_subgraphs(G), key=len)
+    print(len(Gc))
+    print([len(Gc) for Gc in sorted(nx.strongly_connected_component_subgraphs(G), key=len, reverse=True)])
+    H = G.subgraph(np.arange(2000))
+    print(len(H))
+    print([len(Hc) for Hc in sorted(nx.strongly_connected_component_subgraphs(H), key=len, reverse=True)])
+    #print(H.degree())
+    
