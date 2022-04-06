@@ -74,7 +74,7 @@ def mini_batch_grad_descent(X, y, w=None, reg=0, lr=0.1, batch_size=16, epochs=1
     """
 
     if w is None: w = np.zeros(len(X[1]))
-    for i in range(epochs):
+    for _ in range(epochs):
         random_batch = np.random.permutation(np.c_[X, y])
         for j in range(int(len(y) / batch_size)):
             cost, grad = log_cost(random_batch[j * batch_size:(j + 1) * batch_size, 0:-1],
@@ -82,8 +82,6 @@ def mini_batch_grad_descent(X, y, w=None, reg=0, lr=0.1, batch_size=16, epochs=1
             w = w - lr * grad
         lr = lr * 0.92
 
-
-        # lr = lr * np.linalg.norm(grad)/len(y)
 
     ### END CODE
     return w
@@ -100,11 +98,14 @@ def get_edge_probabilities(feature_mat, parameters, linear = False, hybrid=False
         print(0.45*np.sum(sigmoid(feature_mat @ parameters)))
         print(0.55*np.sum(np.array([feature_mat[i, :]@linear_parameters for i in range(feature_mat.shape[0])])))
         return np.maximum(np.minimum(mixed_probs, 1), 0)
-    if not linear:
-        return sigmoid(feature_mat @ parameters)
-    else:
-        edge_probs = [max(min(feature_mat[i, :]@linear_parameters, 1),0) for i in range(feature_mat.shape[0])]
-        return edge_probs
+    return (
+        [
+            max(min(feature_mat[i, :] @ linear_parameters, 1), 0)
+            for i in range(feature_mat.shape[0])
+        ]
+        if linear
+        else sigmoid(feature_mat @ parameters)
+    )
 
 
 def simulate_activations(G, seeds, edge_probs):
@@ -115,7 +116,7 @@ def simulate_activations(G, seeds, edge_probs):
     for seed in seeds:
         activations[seed] = True
 
-    while len(new_activations) > 0:
+    while new_activations:
         current_activation = new_activations[0]
         for neighbour in G[current_activation]:
             already_activated = activations[neighbour]
@@ -287,12 +288,9 @@ def greedy(G, feature_mat, messageSize, seeds, currentParameters, numberMCsims =
     bestMessage = list(message)
 
     for i in range(messageSize):
-        currentResult = 0
-        index = 0
         message = list(bestMessage)
-        for feature in range(1, numberFeatures):
-            index += 1
-
+        currentResult = 0
+        for index, feature in enumerate(range(1, numberFeatures), start=1):
             if bestMessage[feature-1] != 1:
                 message[feature-1] = 0
 
@@ -303,16 +301,15 @@ def greedy(G, feature_mat, messageSize, seeds, currentParameters, numberMCsims =
 
                 assert(sum(message) == 2 + i)
                 current_feature_mat = np.array(feature_mat) * message
-                if not linear:
-                    if UCB:
-                        theta, standard_devs, sigma, c = currentParameters
-                        edge_prob = [sigmoid(current_feature_mat[i, :].T @ theta + c * np.sqrt(current_feature_mat[i, :].T @ standard_devs @ current_feature_mat[i, :])) for i in range(feature_mat.shape[0])]
-                    else:
-                        edge_prob = sigmoid(current_feature_mat @ currentParameters)
-                else:
+                if linear:
                     theta, M_inverse, sigma, c = currentParameters
                     edge_prob = [max(min((current_feature_mat[i, :].T @ theta + c * np.sqrt(current_feature_mat[i, :].T @ M_inverse @ current_feature_mat[i, :])), 1), 0) for i in range(feature_mat.shape[0])]
-                for k in range(numberMCsims):
+                elif UCB:
+                    theta, standard_devs, sigma, c = currentParameters
+                    edge_prob = [sigmoid(current_feature_mat[i, :].T @ theta + c * np.sqrt(current_feature_mat[i, :].T @ standard_devs @ current_feature_mat[i, :])) for i in range(feature_mat.shape[0])]
+                else:
+                    edge_prob = sigmoid(current_feature_mat @ currentParameters)
+                for _ in range(numberMCsims):
                     activations_in_MC_sim = simulate_activations(G, seeds, edge_prob)[0].values()
                     activations.append(activations_in_MC_sim)
                 result = sum(map(sum, activations))/numberMCsims

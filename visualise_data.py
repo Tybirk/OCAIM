@@ -78,7 +78,7 @@ def visualiseResults(x, y_lst, legends, xlabel="", ylabel="", title="", filename
     plt.ylabel(ylabel, fontsize=40)
     plt.xlabel(xlabel, fontsize=40)
     if title:
-        plt.title('%s' %(title), fontsize = 48)
+        plt.title(f'{title}', fontsize = 48)
     plt.tight_layout()
     plt.show()
     if filename:

@@ -15,7 +15,7 @@ def get_feature_matrix(filename, numberOfNodes, numberOfFeatures):
     """
     feature_matrix = np.zeros(numberOfFeatures*numberOfNodes).reshape(numberOfNodes, numberOfFeatures)
 
-    featureToIndex = dict()
+    featureToIndex = {}
     featureCount = 0
     nodeCount = 0
 
@@ -74,10 +74,7 @@ def read_graph(filename, directed=True):
     :param directed: boolean
     :return:
     """
-    if not directed:
-        G = nx.Graph()
-    else:
-        G = nx.DiGraph()
+    G = nx.DiGraph() if directed else nx.Graph()
     with open(filename) as f:
         for line in f:
             d = line.split()
@@ -87,7 +84,7 @@ def read_graph(filename, directed=True):
 
 def create_graph(numberOfNodes, numberOfEdges):
     G = nx.DiGraph()
-    for i in range(numberOfEdges):
+    for _ in range(numberOfEdges):
         rand1 = random.randint(0, numberOfNodes-1)
         rand2 = random.randint(0, numberOfNodes-1)
         if rand1 != rand2:
